@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://docs.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://docs.google.com">
+<title>Frontling</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+<style>
+  .narrow-box{max-width:560px;margin:24px auto}
+  .prose-pre{white-space:pre-wrap}
+  button[aria-disabled="true"]{opacity:.55}
+  #flash:focus{outline:none}
+</style>
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="./"><img src="logo.svg" alt="" width="28" height="28"><span>Frontling</span></a>
+</header>
+<p class="ai-note" id="note"></p>
+<main class="wrap">
+  <div class="flash" id="flash" role="status" tabindex="-1" hidden></div>
+  <div id="app"></div>
+</main>
+<noscript><p class="wrap">이 페이지는 자바스크립트가 필요해요. / This page needs JavaScript.</p></noscript>
+<script src="config.js"></script>
+<script src="i18n.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
