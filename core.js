@@ -6,6 +6,7 @@
   var MAX_LEVEL = 3;
   var CONCERN = /자살|죽고\s*싶|자해|목숨을\s*끊|살기\s*싫|suicid|kill\s+myself|self[-\s]?harm|want\s+to\s+die/i;
   var DETAIL_MAX = 1500;
+  var OUTBOX_MAX = 500;  // unsent log entries kept; progress itself (attempts, reveals, submissions) is never trimmed
 
   function norm(s) { return String(s || "").trim().split(/\s+/).join(" ").toLowerCase(); }
 
@@ -26,6 +27,7 @@
   function log(st, kind, i, detail, now) {
     var d = typeof detail === "string" ? detail : JSON.stringify(detail || {});
     st.outbox.push({ kind: kind, milestone: i, detail: d.slice(0, DETAIL_MAX), at: new Date(now).toISOString() });
+    if (st.outbox.length > OUTBOX_MAX) st.outbox.splice(0, st.outbox.length - OUTBOX_MAX);
   }
 
   function concern(text) { return CONCERN.test(String(text || "")); }
@@ -111,7 +113,7 @@
       }));
   }
 
-  var api = { MAX_LEVEL: MAX_LEVEL, newState: newState, ms: ms, current: current, addAttempt: addAttempt, level: level,
+  var api = { MAX_LEVEL: MAX_LEVEL, OUTBOX_MAX: OUTBOX_MAX, newState: newState, ms: ms, current: current, addAttempt: addAttempt, level: level,
               canReveal: canReveal, reveal: reveal, submit: submit, grade: grade, recordQuiz: recordQuiz,
               validPack: validPack, concern: concern };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.R2CCore = api;

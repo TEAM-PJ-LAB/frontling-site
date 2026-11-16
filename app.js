@@ -4,7 +4,7 @@
   "use strict";
   var C = window.R2CCore, CFG = window.R2C_CONFIG || {}, I18N = window.R2C_I18N;
   var root = document.getElementById("app"), flashEl = document.getElementById("flash");
-  var pack = null, st = null, lang = "ko", view = "work";
+  var pack = null, st = null, lang = "ko", hintTimer = 0, shown = -1;
 
   function _(key, kw) {
     var s = (I18N[lang] && I18N[lang][key]) || I18N.ko[key] || key;
@@ -36,7 +36,7 @@
 
   // ---------- storage + activity log ----------
   function storeKey() { return "r2c:" + pack.code; }
-  function save() { try { localStorage.setItem(storeKey(), JSON.stringify(st)); } catch (e) { /* private mode: in-memory only */ } }
+  function save(s) { s = s || st; try { localStorage.setItem("r2c:" + s.code, JSON.stringify(s)); } catch (e) { /* private mode: in-memory only */ } }
   function load() {
     try { var s = JSON.parse(localStorage.getItem(storeKey()) || "null"); if (s && s.v === 1) return s; } catch (e) { /* ignore */ }
     return C.newState(pack.code);
@@ -47,31 +47,42 @@
     return !!(l.action && f.pid && f.kind);
   }
 
+  // One sender at a time, oldest first. Entries logged while it runs are picked up by the same loop,
+  // so nothing is posted twice and the screen is not rebuilt under the student when a POST returns.
+  var sending = false;
   function flush() {
-    if (!logReady() || !st.outbox.length || !navigator.onLine) return;
-    var l = CFG.log, f = l.fields, batch = st.outbox.slice();
-    batch.reduce(function (p, e) {
-      return p.then(function () {
-        var body = new URLSearchParams();
-        body.append(f.pid, st.pid);
-        if (f.code) body.append(f.code, st.code);
-        body.append(f.kind, e.kind);
-        if (f.milestone) body.append(f.milestone, String(e.milestone + 1));
-        if (f.detail) body.append(f.detail, e.detail);
-        if (f.at) body.append(f.at, e.at);
-        // Google Forms accepts a cross-origin POST; the response is opaque, so success is "no network error".
-        return fetch(l.action, { method: "POST", mode: "no-cors", body: body }).then(function () {
-          st.outbox.splice(st.outbox.indexOf(e), 1);
-          save();
-        });
+    if (sending || !logReady() || !st || !st.outbox.length || navigator.onLine === false) return;
+    var l = CFG.log, f = l.fields, mine = st;
+    sending = true;
+    (function next() {
+      var e = mine.outbox[0];
+      if (!e || mine !== st) return Promise.resolve();  // another project was opened: its own flush takes over
+      var body = new URLSearchParams();
+      body.append(f.pid, mine.pid);
+      if (f.code) body.append(f.code, mine.code);
+      body.append(f.kind, e.kind);
+      if (f.milestone) body.append(f.milestone, String(e.milestone + 1));
+      if (f.detail) body.append(f.detail, e.detail);
+      if (f.at) body.append(f.at, e.at);
+      // Google Forms accepts a cross-origin POST; the response is opaque, so success is "no network error".
+      return fetch(l.action, { method: "POST", mode: "no-cors", body: body, keepalive: true }).then(function () {
+        var k = mine.outbox.indexOf(e);
+        if (k >= 0) mine.outbox.splice(k, 1);
+        save(mine);
+        return next();
       });
-    }, Promise.resolve()).catch(function () { /* offline or blocked: retried on the next action */ }).then(render);
+    })().catch(function () { /* offline or blocked: retried on the next action */ }).then(function () {
+      sending = false;
+      var el = document.getElementById("sync");
+      if (el && st) el.textContent = syncNote();
+    });
   }
 
   function backup() {
     var blob = new Blob([JSON.stringify(st, null, 1)], { type: "application/json" });
     var a = h("a", { href: URL.createObjectURL(blob), download: "frontling-" + pack.code + "-" + (st.pid || "me") + ".json" });
     document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
 
   function testLink(key) {
@@ -145,7 +156,7 @@
       h("form", { class: "composer stack", onsubmit: function (ev) {
         ev.preventDefault();
         var r = C.addAttempt(st, i, ev.target.elements.body.value, Date.now(), pol);
-        if (r.ok) ev.target.elements.body.value = "";
+        if (r.ok || r.reason === "concern") ev.target.elements.body.value = "";
         act(r, "msg.saved");
       } },
         h("label", { for: "body", text: _("attempt_label") }),
@@ -221,8 +232,46 @@
       }));
   }
 
+  // The screen is rebuilt after every action. What the student has typed or opened but not sent must not be lost with it.
+  function keep() {
+    var k = { cur: shown, val: {}, radio: {}, open: {}, focus: null }, a = document.activeElement;
+    root.querySelectorAll("textarea[id], input[id]").forEach(function (el) { k.val[el.id] = el.value; });
+    root.querySelectorAll("input[type=radio]:checked").forEach(function (el) { k.radio[el.name] = el.value; });
+    root.querySelectorAll("details[open] > summary").forEach(function (el) { k.open[el.textContent.replace(/ \(\d+\)$/, "")] = true; });
+    if (a && a.id && root.contains(a)) k.focus = { id: a.id, start: a.selectionStart, end: a.selectionEnd };
+    return k;
+  }
+
+  function restore(k, cur) {
+    if (k.cur === cur) Object.keys(k.val).forEach(function (id) { var el = document.getElementById(id); if (el) el.value = k.val[id]; });
+    Object.keys(k.radio).forEach(function (name) {
+      root.querySelectorAll("input[type=radio]").forEach(function (el) { if (el.name === name) el.checked = el.value === k.radio[name]; });
+    });
+    root.querySelectorAll("details > summary").forEach(function (el) {
+      if (k.open[el.textContent.replace(/ \(\d+\)$/, "")]) el.parentNode.open = true;
+    });
+    var f = k.focus && k.cur === cur && document.getElementById(k.focus.id);
+    if (f) {
+      f.focus({ preventScroll: true });
+      try { f.setSelectionRange(k.focus.start, k.focus.end); } catch (e) { /* not a text field */ }
+    }
+  }
+
+  // A hint button that is waiting out the minimum interval turns usable on its own, without a page action.
+  function armHintTimer(cur) {
+    clearTimeout(hintTimer); hintTimer = 0;
+    if (cur >= pack.milestones.length) return;
+    var m = C.ms(st, cur), lastR = m.reveals[m.reveals.length - 1];
+    var wait = lastR ? lastR.at + pack.policy.hint_min_interval_s * 1000 - Date.now() : 0;
+    if (wait > 0) hintTimer = setTimeout(render, wait + 50);
+  }
+
+  function syncNote() {
+    return st.outbox.length && logReady() ? _("sync_pending", { n: st.outbox.length }) + " · " : "";
+  }
+
   function mainScreen() {
-    var n = pack.milestones.length, cur = C.current(st, n);
+    var n = pack.milestones.length, cur = C.current(st, n), kept = keep();
     var pre = testLink("preTest"), post = testLink("postTest");
     root.replaceChildren(h("div", { class: "workspace" }, aside(cur),
       h("div", { class: "stack-lg" },
@@ -230,14 +279,17 @@
         cur < n ? workPanel(cur) : h("section", { class: "panel stack" }, h("p", { class: "done-state", text: _("all_done") }),
           post ? h("p", {}, h("a", { class: "btn", href: post, target: "_blank", rel: "noopener noreferrer", text: _("posttest") })) : null),
         quizPanel(), guidesPanel(),
-        h("p", { class: "small muted" },
-          st.outbox.length && logReady() ? _("sync_pending", { n: st.outbox.length }) + " · " : "",
+        h("p", { class: "small muted" }, h("span", { id: "sync", text: syncNote() }),
           h("a", { href: "#" + pack.code, onclick: function (ev) { ev.preventDefault(); backup(); }, text: _("backup") })))));
+    restore(kept, cur);
+    shown = cur;
+    armHintTimer(cur);
   }
 
   function render() {
-    if (!pack) return codeScreen(false);
-    if (!st.pid || !st.consent) return joinScreen();
+    clearTimeout(hintTimer); hintTimer = 0;
+    if (!pack) { shown = -1; return codeScreen(false); }
+    if (!st.pid || !st.consent) { shown = -1; return joinScreen(); }
     mainScreen();
   }
 
@@ -249,7 +301,7 @@
 
   function open() {
     var code = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase();
-    pack = null; flash("");
+    pack = null; shown = -1; clearTimeout(hintTimer); flash("");
     if (!/^[a-z0-9-]{3,40}$/.test(code)) { setLang((navigator.language || "ko").slice(0, 2)); return codeScreen(false); }
     fetch("packs/" + code + ".json", { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error(r.status);

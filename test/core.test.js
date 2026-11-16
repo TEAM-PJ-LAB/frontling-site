@@ -91,3 +91,11 @@ test("pack validation", () => {
   assert.ok(!C.validPack({ ...ok, milestones: [{ stuck: [{ label: "l", hints: ["1", "2"] }] }] }));
   assert.ok(!C.validPack({ ...ok, milestones: [] }));
 });
+
+test("the unsent log is bounded so an unconfigured or offline site cannot fill browser storage", () => {
+  const st = C.newState("x");
+  for (let k = 0; k < C.OUTBOX_MAX + 50; k++) C.addAttempt(st, 0, A + " 시도 " + k, T + k, POL);
+  assert.equal(st.outbox.length, C.OUTBOX_MAX);
+  assert.ok(st.outbox[st.outbox.length - 1].detail.endsWith("시도 " + (C.OUTBOX_MAX + 49)));  // newest kept
+  assert.equal(C.ms(st, 0).attempts.length, C.OUTBOX_MAX + 50);                                // progress itself untouched
+});
