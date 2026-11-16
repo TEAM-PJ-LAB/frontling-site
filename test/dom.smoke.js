@@ -3,12 +3,13 @@
 const { JSDOM } = require("jsdom");
 const fs = require("fs"), path = require("path");
 const SITE = path.join(__dirname, "..");
-const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8").replace(/<script src="[^"]+"><\/script>/g, "");
-const sent = [];
+const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8").replace(/<script[^>]*>[\s\S]*?<\/script>/g, "");
+const sent = [], packFetches = [];
 const dom = new JSDOM(html, { url: "https://example.org/site/#demo", runScripts: "outside-only", pretendToBeVisual: true });
 const w = dom.window;
 w.fetch = (url, opt) => {
   if (String(url).startsWith("packs/")) {
+    packFetches.push(String(url));
     const f = path.join(SITE, url.split("?")[0]);
     return Promise.resolve(fs.existsSync(f) ? { ok: true, json: () => Promise.resolve(JSON.parse(fs.readFileSync(f, "utf8"))) } : { ok: false, status: 404 });
   }
@@ -64,4 +65,14 @@ const check = (name, ok) => { assert.ok(ok, name); console.log("ok", name); };
   check("progress stored, outbox drained", saved.outbox.length === 0 && saved.ms[0].attempts.length === 1);
   w.location.hash = "#nope"; await tick(); await tick();
   check("unknown code shows an error", text().includes("찾지 못했어요") || text().includes("couldn't find"));
+  // The project file that index.html started downloading is used once, without a second request.
+  const ecg = JSON.parse(fs.readFileSync(path.join(SITE, "packs/ecg.json"), "utf8"));
+  w.R2C_PACK = { code: "ecg", p: Promise.resolve({ ok: true, json: () => Promise.resolve(ecg) }) };
+  const before = packFetches.length;
+  w.location.hash = "#ecg"; await tick(); await tick();
+  check("early download is used", text().includes(ecg.project.title) && packFetches.length === before && w.R2C_PACK === null);
+  w.location.hash = "#demo"; await tick(); await tick();
+  check("later links fetch normally", packFetches.length === before + 1 && text().includes("M2"));
+  w.location.hash = "#%"; await tick(); await tick();
+  check("a malformed link asks for the code instead of breaking", !!d.getElementById("code") && !text().includes("찾지 못했어요"));
 })().catch((e) => { console.error(e.message); process.exit(1); });

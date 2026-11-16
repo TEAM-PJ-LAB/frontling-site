@@ -300,16 +300,25 @@
   }
 
   function open() {
-    var code = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase();
+    var code = "";
+    try { code = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase(); } catch (e) { /* malformed link: ask for the code */ }
     pack = null; shown = -1; clearTimeout(hintTimer); flash("");
     if (!/^[a-z0-9-]{3,40}$/.test(code)) { setLang((navigator.language || "ko").slice(0, 2)); return codeScreen(false); }
-    fetch("packs/" + code + ".json", { cache: "no-cache" }).then(function (r) {
+    // index.html starts this download before the scripts arrive; use it once, otherwise fetch here.
+    var early = window.R2C_PACK;
+    window.R2C_PACK = null;
+    (early && early.code === code ? early.p : fetch("packs/" + code + ".json", { cache: "no-cache" })).then(function (r) {
       if (!r.ok) throw new Error(r.status);
       return r.json();
     }).then(function (p) {
+      if (code !== currentCode()) return;  // the link changed while this was loading
       if (!C.validPack(p) || p.code !== code) throw new Error("invalid pack");
       pack = p; setLang(p.lang); st = load(); render(); flush();
-    }).catch(function () { setLang((navigator.language || "ko").slice(0, 2)); codeScreen(true); });
+    }).catch(function () { if (code === currentCode()) { setLang((navigator.language || "ko").slice(0, 2)); codeScreen(true); } });
+  }
+
+  function currentCode() {
+    try { return decodeURIComponent(location.hash.slice(1)).trim().toLowerCase(); } catch (e) { return ""; }
   }
 
   window.addEventListener("hashchange", open);

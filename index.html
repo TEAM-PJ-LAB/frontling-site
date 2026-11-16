@@ -5,8 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://docs.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://docs.google.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-A304RRr66a2YfLp4xQ+r5hAxTA2OeeiEGcj9R0fVHMI='; connect-src 'self' https://docs.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://docs.google.com">
 <title>Frontling</title>
+<!-- Starts the project file download while the scripts are still loading. Its hash is pinned in the CSP above:
+     after any edit, update the hash (site/test/page.test.js prints the expected value). -->
+<script>(function(){var c;try{c=decodeURIComponent(location.hash.slice(1)).trim().toLowerCase()}catch(e){return}if(/^[a-z0-9-]{3,40}$/.test(c))window.R2C_PACK={code:c,p:fetch("packs/"+c+".json",{cache:"no-cache"}).then(function(r){return r},function(){return{ok:false,status:0}})}})();</script>
+<script defer src="config.js"></script>
+<script defer src="i18n.js"></script>
+<script defer src="core.js"></script>
+<script defer src="app.js"></script>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -26,9 +33,5 @@
   <div id="app"></div>
 </main>
 <noscript><p class="wrap">이 페이지는 자바스크립트가 필요해요. / This page needs JavaScript.</p></noscript>
-<script src="config.js"></script>
-<script src="i18n.js"></script>
-<script src="core.js"></script>
-<script src="app.js"></script>
 </body>
 </html>
