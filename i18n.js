@@ -1,6 +1,7 @@
 /* UI strings for the student site (ko/en). The project content itself comes from the pack in its own language. */
 window.R2C_I18N = {
   ko: {
+    note_label: "AI 힌트 안내",
     brand_note: "이 서비스의 힌트는 AI가 만들고 담당 검토자가 미리 읽고 승인한 것이에요. 정답이나 완성 코드는 주지 않아요.",
     code_h: "과제 코드 입력", code_label: "받은 과제 코드", code_btn: "열기",
     code_help: "운영자에게 받은 링크로 들어오면 코드가 자동으로 입력돼요.",
@@ -21,7 +22,9 @@ window.R2C_I18N = {
     quiz_weak: "더 공부할 개념", quiz_ok: "필요한 개념을 모두 알고 있어요.", answer: "정답",
     guides_h: "학습 자료", why: "필요한 이유", summary: "핵심", steps: "공부 순서", practice: "연습 과제", keywords: "검색어",
     guide_note: "AI가 만든 자료라 틀린 내용이 있을 수 있어요. 교과서나 믿을 만한 자료로 확인하세요.",
-    backup: "내 기록 파일로 저장", sync_pending: "보내지 못한 기록 {n}건 (인터넷이 연결되면 다시 보내요)",
+    backup: "내 기록 파일로 저장", restore: "기록 파일 불러오기", join_restore: "다른 기기에서 저장한 기록 파일이 있나요?",
+    "msg.restored": "기록을 불러왔어요.", "msg.restore_bad": "이 과제의 기록 파일이 아니에요. 파일을 다시 확인해 주세요.",
+    "msg.restore_older": "지금 이 기기의 기록이 더 많아서 불러오지 않았어요.", "msg.restore_other": "다른 참여 번호의 기록이라 불러오지 않았어요.", sync_pending: "보내지 못한 기록 {n}건 (인터넷이 연결되면 다시 보내요)",
     "msg.attempt_too_short": "시도 내용을 조금 더 구체적으로 적어 주세요. (무엇을 했고, 어디서 막혔는지)",
     "msg.duplicate": "지난번과 같은 시도예요. 이번에 무엇을 바꿔 봤는지 적어 주세요.",
     "msg.need_attempt": "힌트를 열려면 먼저 새 시도를 저장해 주세요.",
@@ -29,9 +32,16 @@ window.R2C_I18N = {
     "msg.max_level": "이 지점의 힌트를 모두 열었어요. 검토자에게 질문해 보세요.",
     "msg.concern": "걱정되는 내용이 있어 잠시 멈췄어요. 멘토나 보호자, 믿을 수 있는 어른에게 바로 이야기해 주세요. 위급하면 112(경찰)나 119(구급)에 연락하세요.",
     "msg.submit_empty": "제출할 결과물 링크나 설명을 적어 주세요.", "msg.saved": "저장했어요.", "msg.submitted": "제출했어요. 다음 마일스톤이 열렸어요.",
-    "msg.join": "참여 번호를 적고 동의 여부를 확인해 주세요."
+    "msg.join": "참여 번호를 적고 동의 여부를 확인해 주세요.",
+    "msg.hint_opened": "{label}: {level} 힌트를 열었어요.",
+    rate_q: "이 힌트가 도움이 됐나요?", rate_up: "도움이 됐어요", rate_down: "도움이 안 됐어요", "msg.rated": "알려 줘서 고마워요. 힌트를 고치는 데 써요.",
+    "msg.rate_none": "평가할 힌트가 없어요.",
+    rec_chip: "추천", rec_help: "방금 적은 시도와 가장 가까운 지점에 ‘추천’을 표시했어요. 다른 지점을 골라도 괜찮아요.",
+    "msg.clock": "기기 시간이 뒤로 바뀐 것 같아요. 시간 설정을 확인한 뒤 다시 눌러 주세요.",
+    "msg.not_current": "지금 마일스톤만 제출할 수 있어요.", "msg.done": "이미 제출한 마일스톤이에요."
   },
   en: {
+    note_label: "About the AI hints",
     brand_note: "Hints here were written by AI and read and approved in advance by a reviewer. You won't get answers or complete code.",
     code_h: "Enter your project code", code_label: "Project code", code_btn: "Open",
     code_help: "If you came from the link your organizer sent, the code is filled in for you.",
@@ -52,7 +62,9 @@ window.R2C_I18N = {
     quiz_score: "{correct} of {total}", quiz_weak: "Concepts to review", quiz_ok: "You know every concept this project needs.", answer: "Answer",
     guides_h: "Study guides", why: "Why you need it", summary: "The idea", steps: "How to learn it", practice: "Practice", keywords: "Search terms",
     guide_note: "Made by AI and may contain mistakes. Check it against a textbook or another trusted source.",
-    backup: "Save my log to a file", sync_pending: "{n} log entries not sent yet (they'll be sent when you're online)",
+    backup: "Save my log to a file", restore: "Load a saved log file", join_restore: "Saved a log file on another device?",
+    "msg.restored": "Your log is back.", "msg.restore_bad": "That isn't a log file for this project. Check the file and try again.",
+    "msg.restore_older": "This device already has more progress, so the file wasn't loaded.", "msg.restore_other": "That file belongs to another participant number, so it wasn't loaded.", sync_pending: "{n} log entries not sent yet (they'll be sent when you're online)",
     "msg.attempt_too_short": "Please be a bit more specific: what did you do, and where did you get stuck?",
     "msg.duplicate": "That's the same as your last attempt. What did you change this time?",
     "msg.need_attempt": "Save a new attempt first, then open a hint.",
@@ -60,6 +72,12 @@ window.R2C_I18N = {
     "msg.max_level": "You've opened every hint for this point. Ask your reviewer.",
     "msg.concern": "We paused because something you wrote worries us. Please talk to a mentor, a parent or another adult you trust right away. In an emergency, call your local emergency number.",
     "msg.submit_empty": "Add a link or a short description of your work.", "msg.saved": "Saved.", "msg.submitted": "Submitted. The next milestone is open.",
-    "msg.join": "Enter your participant number and confirm consent."
+    "msg.join": "Enter your participant number and confirm consent.",
+    "msg.hint_opened": "{label}: {level} hint opened.",
+    rate_q: "Did this hint help?", rate_up: "It helped", rate_down: "It didn't help", "msg.rated": "Thanks. We use this to improve the hints.",
+    "msg.rate_none": "There's no hint to rate.",
+    rec_chip: "Suggested", rec_help: "The stuck point closest to what you just wrote is marked ‘Suggested’. You can pick another one.",
+    "msg.clock": "Your device clock seems to have moved back. Check the time settings, then try again.",
+    "msg.not_current": "Only the current milestone can be submitted.", "msg.done": "This milestone was already submitted."
   }
 };

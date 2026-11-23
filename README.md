@@ -5,4 +5,78 @@ Research-to-Curriculum repository (`site/`); do not edit here, changes are overw
 
 - Open a project: `https://team-pj-lab.github.io/frontling-site/#<code>` (demo: `#demo`)
 - No server, no login, no API key. Progress stays in the browser; the optional activity log goes to a Google Form (`config.js`).
-- Tests: `node --test test/*.test.js`
+- Tests: `node --test test/*.test.js`; end-to-end: `NODE_PATH=<dir with jsdom>/node_modules node test/dom.smoke.js`.
+- Build: `NODE_PATH=<dir with esbuild>/node_modules node scripts/build.js` writes `dist/`, then `node test/dist.smoke.js`
+  checks it, and `CHROME_PATH=<chrome> node test/browser.smoke.js` checks it in real Chrome (CSP, axe, phone width,
+  offline worker, kill switch). CI runs all of these and publishes `dist/` (not the source) to `gh-pages`.
+- **If the offline worker misbehaves:** set `offline: false` in `config.js` and deploy. Open pages remove it; browsers
+  that only load the cached page get a worker that clears the caches and removes itself on their next visit.
+- **Backups:** students can save their log to a file and load it on another device ("기록 파일 불러오기"); a file is
+  only accepted for the same project and participant and when it has at least as much progress.
+
+## How it stays fast
+
+- **One request for the page.** The build inlines and minifies the CSS, the four scripts and the logo into
+  `index.html` (about 15 KB gzipped). The inline bootstrap starts the project file download before anything else.
+  Both inline scripts are pinned by hash in the CSP; the build adds the bundle's hash and refuses to finish without it.
+- **Instant repeat visits and offline use** (`sw.js`). The page comes from the cache; a new deploy is picked up in the
+  background and used from the next visit. Project files are shown from the cache at once and refreshed in the
+  background; if the fresh file differs (a reviewer fixed a hint), the open page redraws with it.
+- Measured in Chrome with 300 ms added to every request: first visit about 630 ms, repeat visits about 20 ms (also when
+  the project file takes 8 s or the device is offline). Lighthouse mobile: 100 in every category.
+- Inline vs. a separate bundle file was measured (real Chrome, slow 4G, 4x CPU, first visit): same first paint
+  (260 ms), input box on screen at 442 ms inline vs. 577 ms as a file, so the bundle stays inline.
+
+## Publishing packs
+
+Packs must be sealed before they are published: `node scripts/seal_packs.js` (CI refuses unsealed packs).
+Sealing hides hint text and quiz answers from anyone opening `packs/<code>.json`.
+
+## What a serverless site can and cannot guarantee
+
+Everything runs on the student's device, so the rules keep honest students on the hint ladder but cannot stop a
+determined one. Read the data with that in mind.
+
+- **Sealing is obfuscation, not encryption.** The key is in `core.js`; a student who reads the code can unseal every hint.
+- **The hint rules (attempt first, minimum interval, 3 levels) are enforced in the browser.** Editing localStorage skips
+  them. A clock moved back is caught and logged (`kind = clock`), a clock moved forward is not.
+- **Trust the Google Form timestamp, not the `at` field.** `at` comes from the device clock; the Form's own timestamp is
+  set by Google when the row arrives.
+- **Anyone can post rows to the Form** (its URL and field ids are public). With the optional `seq` field set in `config.js`,
+  every row carries `<sid>:<seq>`: a gap in `seq` is a lost row, the same pair twice is a repeat, and a participant number
+  with a second, unknown `sid` may be someone else (or a second device). The student's backup file holds their full record.
+- **The distress check is a keyword filter.** It misses indirect wording and must not replace a human reviewing the log.
+  Flags (`kind = flag`) carry no text by design; follow up with the student in person.
+
+## Stuck-point suggestions (gets better with every cohort)
+
+After a student saves an attempt, the site marks the stuck point closest to what they wrote ("추천" / "Suggested").
+Matching runs on the device in about 30 µs (character 2-3-grams, cosine similarity; `rankStuck` / `recommend` in core.js).
+
+- **Day one:** stuck-point labels alone. Fragments shared by every label of a milestone are ignored.
+- **After a pilot:** `node scripts/mine_signals.js <form-export.csv> [--cols pid=...,kind=...]` learns from the log which
+  fragments preceded which hint, reports leave-one-student-out accuracy (labels only vs. with signals), and with
+  `--write` stores the learned weights in the packs as `signals`. Run it in the source repository before sealing.
+- **Privacy:** packs get 2-3 character fragments with weights, never sentences, and only fragments written by at least
+  three different students (`--min-students`).
+- **Measuring it:** every hint row in the log carries `rec`, the suggestion shown before it, so how often students take
+  the suggestion is visible per project and per cohort.
+
+The code is generic and public; the signals come from our own students' logs, which stay private.
+
+## Which hints work (hint experiments)
+
+- **Ratings:** under the newest hint of a stuck point the student can answer "did this help?" once (`rate` rows).
+- **Variants:** a stuck point may carry `variants` (for each of the 3 levels, a list of alternative wordings). Each
+  student always gets the same variant (hash of participant number and hint position); the hint row records `v`.
+  Variants are sealed like hints.
+- **Report:** `node scripts/hint_report.js <form-export.csv> [--out report.md] [--json]` gives, for every hint, what
+  happened after it was opened: resolved (milestone submitted without the next level), escalated (next level opened)
+  or still open; minutes to the next attempt; how much that attempt changed; ratings. It queues hints for review when
+  they are probably (>= 90%, Beta posterior) below the project's average at that level, or mostly rated unhelpful, and
+  picks a variant as the winner when it is best with >= 95% probability and every variant has >= 10 decided cases.
+  Groups under 3 students get no numbers; no student text is printed.
+- **Promote:** `--apply --write` makes each winner the hint and ends that experiment (sealed packs stay sealed).
+
+Pipeline in the source repository, per cohort: export the Form → `hint_report.js` (review queue, experiments) →
+`mine_signals.js --write` → `hint_report.js --apply --write` → `seal_packs.js` → publish.

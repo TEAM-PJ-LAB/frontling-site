@@ -7,6 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-A304RRr66a2YfLp4xQ+r5hAxTA2OeeiEGcj9R0fVHMI='; connect-src 'self' https://docs.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://docs.google.com">
 <title>Frontling</title>
+<meta name="description" content="Frontling 연구 프로젝트 학습 공간: 마일스톤, 단계별 힌트, 개념 연습. / Frontling research project workspace.">
 <!-- Starts the project file download while the scripts are still loading. Its hash is pinned in the CSP above:
      after any edit, update the hash (site/test/page.test.js prints the expected value). -->
 <script>(function(){var c;try{c=decodeURIComponent(location.hash.slice(1)).trim().toLowerCase()}catch(e){return}if(/^[a-z0-9-]{3,40}$/.test(c))window.R2C_PACK={code:c,p:fetch("packs/"+c+".json",{cache:"no-cache"}).then(function(r){return r},function(){return{ok:false,status:0}})}})();</script>
@@ -27,7 +28,8 @@
 <header class="bar">
   <a class="brand" href="./"><img src="logo.svg" alt="" width="28" height="28"><span>Frontling</span></a>
 </header>
-<p class="ai-note" id="note"></p>
+<!-- Filled in before the scripts run so the page does not jump; must match brand_note (ko) in i18n.js. -->
+<aside class="ai-note" id="note" aria-label="AI 힌트 안내">이 서비스의 힌트는 AI가 만들고 담당 검토자가 미리 읽고 승인한 것이에요. 정답이나 완성 코드는 주지 않아요.</aside>
 <main class="wrap">
   <div class="flash" id="flash" role="status" tabindex="-1" hidden></div>
   <div id="app"></div>

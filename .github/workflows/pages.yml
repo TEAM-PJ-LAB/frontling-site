@@ -1,6 +1,6 @@
 # Lives in the public TEAM-PJ-LAB/frontling-site repo (copied there by scripts/publish_site.sh).
 # Repository settings: Pages -> Source: Deploy from a branch -> gh-pages, / (root). Pushing gh-pages once turns Pages on.
-# main is what was published; gh-pages is what is served. It only moves after the tests pass.
+# main holds the source; gh-pages holds the built site (dist/, one file per page). It only moves after every check passes.
 name: pages
 on:
   push:
@@ -15,9 +15,32 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with: { node-version: 22 }
       - run: node --test test/*.test.js
-      - run: git push origin HEAD:gh-pages
+      # Build and browser-simulation tools live outside the site, so nothing extra gets published.
+      - run: npm install --prefix "$RUNNER_TEMP/tools" --no-save --no-audit --no-fund jsdom@26.1.0 esbuild@0.24.2 puppeteer-core@24.10.0 axe-core@4.10.3
+      - name: End-to-end check of the source
+        run: node test/dom.smoke.js
+        env: { NODE_PATH: "${{ runner.temp }}/tools/node_modules" }
+      - name: Build dist/
+        run: node scripts/build.js
+        env: { NODE_PATH: "${{ runner.temp }}/tools/node_modules" }
+      - name: End-to-end check of the built site
+        run: node test/dist.smoke.js
+        env: { NODE_PATH: "${{ runner.temp }}/tools/node_modules" }
+      # Real Chrome (preinstalled on the runner): CSP, accessibility, phone width, offline worker and its kill switch.
+      - name: Browser check of the built site
+        run: CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable)" node test/browser.smoke.js
+        env: { NODE_PATH: "${{ runner.temp }}/tools/node_modules" }
+      - name: Publish dist/ to gh-pages
+        working-directory: dist
+        env: { TOKEN: "${{ github.token }}" }
+        run: |
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "deploy $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

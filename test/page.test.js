@@ -26,3 +26,23 @@ test("the bootstrap and app.js agree on what a project code is and how the file 
   assert.ok(html.includes(rule) && app.includes(rule));
   assert.ok(html.includes('{cache:"no-cache"}') && app.includes(opts));
 });
+
+test("published packs are sealed, so hints and answers can't be read from the file", () => {
+  const dir = path.join(SITE, "packs");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".json"))) {
+    const p = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+    assert.equal(p.sealed, 1, f + " is not sealed: run node scripts/seal_packs.js");
+  }
+});
+
+test("the offline cache lists every file index.html loads", () => {
+  const sw = fs.readFileSync(path.join(SITE, "sw.js"), "utf8");
+  const loaded = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map(m => m[1]).filter(u => !/^https?:/.test(u));
+  for (const u of loaded) assert.ok(sw.includes('"' + u.replace(/^\.\//, "") + '"') || u === "./", u + " missing from SHELL in sw.js");
+});
+
+test("the AI note in index.html matches the Korean string, so nothing shifts when the scripts run", () => {
+  global.window = {}; require("../i18n.js");
+  const ko = global.window.R2C_I18N.ko;
+  assert.ok(html.includes('aria-label="' + ko.note_label + '">' + ko.brand_note + "</aside>"));
+});
