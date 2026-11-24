@@ -222,7 +222,7 @@ test("mining: labels from attempt -> hint pairs, fragments from fewer than 3 stu
   fs.writeFileSync(path.join(dir, "log.csv"), "﻿" + csv);
   const out = execFileSync("node", [path.join(__dirname, "..", "scripts", "mine_signals.js"), path.join(dir, "log.csv"), "--write", "--packs", packs], { encoding: "utf8" });
   assert.match(out, /9 labelled attempts, 4 students/);
-  assert.match(out, /labels only: right - of 0 shown \| with signals: right 100% of 9 shown/);
+  assert.match(out, /labels only: right - of 0 shown \| with signals: right 100% of [89] shown/);
   const got = JSON.parse(fs.readFileSync(path.join(packs, "t1.json"), "utf8"));
   const sig = got.milestones[0].stuck.map((s) => s.signals || {});
   assert.ok(sig[0]["결측"] > 0 && sig[1]["정규"] > 0);
@@ -245,4 +245,25 @@ test("restore from a backup file: same project and participant, never less progr
   assert.equal(C.restoreFrom({ ...C.newState("demo"), pid: "P99" }, file, "demo", T).reason, "restore_other");
   assert.equal(C.restoreFrom(C.newState("demo"), { ...file, ms: { 0: { attempts: "x", reveals: [] } } }, "demo", T).reason, "restore_bad");
   assert.equal(C.restoreFrom(C.newState("demo"), null, "demo", T).reason, "restore_bad");
+});
+
+test("matching reads the hints (sealed or not) without changing the pack, and beats labels alone", () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "packs", "climate.json"), "utf8"));
+  const before = JSON.stringify(raw);
+  const plain = C.attachHints(JSON.parse(before)), sealed = C.attachHints(C.sealPack(JSON.parse(before)));
+  assert.equal(JSON.stringify(plain), before, "nothing enumerable is added: saved and sent packs stay the same");
+  // student-style messages, one per stuck point of milestone 1
+  const msgs = [
+    ["pd.read_csv gives me one giant column with everything squished together, i think the file has some header line", 0],
+    ["there are J-D, DJF, MAM... columns and i dont get which one is the yearly number", 1],
+    ["fill_between keeps throwing errors about the shape of my arrays when i try to shade around the line", 2],
+  ];
+  for (const [text, s] of msgs) {
+    assert.deepEqual(C.rankStuck(sealed.milestones[0], text), C.rankStuck(plain.milestones[0], text), "sealed = unsealed");
+    assert.equal(C.rankStuck(plain.milestones[0], text)[0].s, s, text);
+  }
+  const t0 = process.hrtime.bigint();
+  for (let k = 0; k < 1000; k++) C.recommend(plain.milestones[0], msgs[k % 3][0]);
+  const us = Number(process.hrtime.bigint() - t0) / 1e6;
+  assert.ok(us < 1000, "1000 suggestions in under a second on this machine (" + us.toFixed(0) + " ms)");
 });

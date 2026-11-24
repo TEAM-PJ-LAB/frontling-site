@@ -122,3 +122,34 @@ test("last-level hints are not judged by resolve rate mid-cohort, and --final co
   assert.equal(find(fin, 0, 1).review, true, "after the cohort, a hint half the students stopped at is queued");
   assert.ok(find(fin, 2, 3).pLow !== null, "after the cohort, the last level is judged too");
 });
+
+test("mining: students who took the shown suggestion count half, so the model does not just learn its own guesses", () => {
+  const os = require("os"), { execFileSync } = require("child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mine-")), packs = path.join(dir, "packs");
+  fs.mkdirSync(packs);
+  const pack = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "packs", "demo.json"), "utf8"));
+  fs.writeFileSync(path.join(packs, "demo.json"), JSON.stringify(pack));
+  // 4 students wrote "그래프 축이 이상해" and took the suggestion (stuck 0); 3 wrote the same and chose stuck 1 unprompted.
+  const rows = [["pid", "code", "kind", "milestone", "detail", "at"]];
+  let t = 0;
+  const add = (pid, s, rec) => {
+    rows.push([pid, "demo", "attempt", "1", "그래프 축이 이상해", new Date(Date.UTC(2026, 10, 1) + 60000 * t++).toISOString()]);
+    rows.push([pid, "demo", "hint", "1", JSON.stringify({ stuck: s, level: 1, rec }), new Date(Date.UTC(2026, 10, 1) + 60000 * t++).toISOString()]);
+  };
+  for (let i = 0; i < 4; i++) add("f" + i, 0, 0);
+  for (let i = 0; i < 3; i++) add("u" + i, 1, -1);
+  const csv = rows.map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
+  fs.writeFileSync(path.join(dir, "log.csv"), csv);
+  const run = (extra) => {
+    fs.writeFileSync(path.join(packs, "demo.json"), JSON.stringify(pack));
+    const out = execFileSync("node", [path.join(__dirname, "..", "scripts", "mine_signals.js"), path.join(dir, "log.csv"), "--write", "--packs", packs, ...extra], { encoding: "utf8" });
+    const p = JSON.parse(fs.readFileSync(path.join(packs, "demo.json"), "utf8"));
+    const w = (s) => Object.values(p.milestones[0].stuck[s].signals || {}).reduce((a, b) => a + b, 0);
+    return { out, s0: w(0), s1: w(1) };
+  };
+  const full = run(["--followed", "1"]), half = run([]);
+  assert.ok(full.s0 > 0 && half.s0 < full.s0, "followed examples weigh less by default");
+  assert.ok(half.s1 >= full.s1, "unprompted choices keep their weight");
+  assert.match(half.out, /4 took the suggestion/);
+  assert.match(half.out, /no suggestion shown \(3\)/);
+});

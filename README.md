@@ -51,12 +51,20 @@ determined one. Read the data with that in mind.
 ## Stuck-point suggestions (gets better with every cohort)
 
 After a student saves an attempt, the site marks the stuck point closest to what they wrote ("추천" / "Suggested").
-Matching runs on the device in about 30 µs (character 2-3-grams, cosine similarity; `rankStuck` / `recommend` in core.js).
+Matching runs on the device in well under a millisecond (character 2-3-grams plus English words, cosine similarity;
+`rankStuck` / `recommend` in core.js). A stuck point is described by its label and its three hints (read on the device,
+never shown by this).
 
-- **Day one:** stuck-point labels alone. Fragments shared by every label of a milestone are ignored.
+- **Day one:** labels and hints. Fragments shared by every stuck point of a milestone are ignored.
+- **Measured** on 270 student-style messages for the three English projects (written by a separate model that did not
+  see the matcher; thresholds chosen on half, checked on the other half): top guess right 82% (labels only: 69-79%);
+  a suggestion is shown for about 3 in 4 attempts and is right 90-92% of the time (labels only: 71-83%). Korean has no
+  benchmark yet: the demo project's labels are placeholders.
 - **After a pilot:** `node scripts/mine_signals.js <form-export.csv> [--cols pid=...,kind=...]` learns from the log which
   fragments preceded which hint, reports leave-one-student-out accuracy (labels only vs. with signals), and with
   `--write` stores the learned weights in the packs as `signals`. Run it in the source repository before sealing.
+- **Feedback loop:** students who simply take the shown suggestion count half (`--followed 0.5`), so the model does not
+  mostly learn its own guesses; the report also gives accuracy on attempts where no suggestion was shown.
 - **Privacy:** packs get 2-3 character fragments with weights, never sentences, and only fragments written by at least
   three different students (`--min-students`).
 - **Measuring it:** every hint row in the log carries `rec`, the suggestion shown before it, so how often students take

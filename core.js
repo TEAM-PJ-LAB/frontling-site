@@ -114,10 +114,16 @@
 
   // ---------- stuck-point matching ----------
   // Ranks a milestone's stuck points by how close they are to what the student wrote, on the device.
-  // Text becomes character 2- and 3-grams (robust to Korean spacing and English word endings). A stuck point's profile is
-  // its label, plus `signals` when the pack has them: n-gram weights mined from past students' attempts and the hint they
-  // opened next (scripts/mine_signals.js). The code is generic; the signals come from our own logs and only get better.
-  var REC_MIN = 0.06, REC_MARGIN = 1.25;
+  // Text becomes character 2- and 3-grams (robust to Korean spacing and English word endings) plus whole English words.
+  // A stuck point's profile is its label and its three hints (read on the device after attachHints(pack); the hint text
+  // itself is never shown or sent by this), plus `signals` when the pack has them: weights mined from past students'
+  // attempts and the hint they opened next (scripts/mine_signals.js).
+  // Measured on 270 student-style messages for the 3 English projects, split in half (thresholds chosen on one half,
+  // checked on the other): top guess right 69-79% -> 82%; with about the same share of suggestions shown, wrong
+  // suggestions 13-22% -> 6-7% of attempts. There is no real Korean benchmark yet (the demo labels are placeholders).
+  var REC_MIN = 0.12, REC_MARGIN = 1.2;
+  var STOP = {};
+  "i a an the to of and or in on at is it my me we you this that what how why do does did dont can cant not no be am are was were for with which when so but if just".split(" ").forEach(function (w) { STOP[w] = 1; });
 
   function grams(text) {
     var t = " " + String(text || "").toLowerCase().replace(/[^0-9a-z\uac00-\ud7a3\u3131-\u318e]+/g, " ").replace(/\s+/g, " ").trim() + " ";
@@ -127,22 +133,42 @@
       if (k.trim().length < 2 || /^[\s0-9]+$/.test(k)) continue;
       g[k] = (g[k] || 0) + 1;
     }
+    t.trim().split(" ").forEach(function (w) {
+      if (/^[a-z][a-z0-9]+$/.test(w) && !STOP[w]) g["w:" + w] = (g["w:" + w] || 0) + 1;
+    });
     return g;
+  }
+
+  // Lets the matcher read a pack's hints (sealed or not). Call once after loading a pack; the text stays in memory only.
+  function attachHints(pack) {
+    pack.milestones.forEach(function (m, i) {
+      var texts = m.stuck.map(function (s, si) {
+        return s.hints.map(function (_, k) { try { return hintText(pack, i, si, k, 0); } catch (e) { return ""; } });
+      });
+      Object.defineProperty(m, "_hints", { value: texts, enumerable: false, configurable: true });
+      delete m._profiles;
+    });
+    return pack;
   }
 
   function profiles(milestone) {
     if (milestone._profiles) return milestone._profiles;
-    var lab = milestone.stuck.map(function (s) { return grams(s.label); }), df = {}, n = lab.length;
-    lab.forEach(function (g) { Object.keys(g).forEach(function (k) { df[k] = (df[k] || 0) + 1; }); });
+    // For each stuck point: in how many of its texts (label, hints) each n-gram appears.
+    var docs = milestone.stuck.map(function (s, si) {
+      var d = {}, texts = [s.label].concat(milestone._hints ? milestone._hints[si] : []);
+      texts.forEach(function (t) { Object.keys(grams(t)).forEach(function (k) { d[k] = (d[k] || 0) + 1; }); });
+      return d;
+    }), df = {}, n = docs.length;
+    docs.forEach(function (d) { Object.keys(d).forEach(function (k) { df[k] = (df[k] || 0) + 1; }); });
     var out = milestone.stuck.map(function (s, si) {
       var w = {};
-      // A label n-gram shared by every stuck point says nothing about which one it is.
-      Object.keys(lab[si]).forEach(function (k) { var idf = Math.log((n + 1) / df[k]); if (idf > 0.01) w[k] = idf; });
+      // An n-gram every stuck point of the milestone has says nothing about which one it is.
+      Object.keys(docs[si]).forEach(function (k) { var idf = Math.log((n + 1) / df[k]); if (idf > 0.01) w[k] = docs[si][k] * idf; });
       Object.keys(s.signals || {}).forEach(function (k) { w[k] = (w[k] || 0) + s.signals[k]; });
       var norm = 0; Object.keys(w).forEach(function (k) { norm += w[k] * w[k]; });
       return { w: w, norm: Math.sqrt(norm) || 1 };
     });
-    Object.defineProperty(milestone, "_profiles", { value: out, enumerable: false });  // cached, never saved or sent
+    Object.defineProperty(milestone, "_profiles", { value: out, enumerable: false, configurable: true });  // cached, never saved or sent
     return out;
   }
 
@@ -400,7 +426,7 @@
               ms: ms, current: current, addAttempt: addAttempt, level: level, canReveal: canReveal, reveal: reveal, submit: submit,
               grade: grade, recordQuiz: recordQuiz, validPack: validPack, concern: concern,
               sealPack: sealPack, hintText: hintText, quizKey: quizKey,
-              grams: grams, rankStuck: rankStuck, recommend: recommend, suggestion: suggestion,
+              grams: grams, rankStuck: rankStuck, recommend: recommend, attachHints: attachHints, suggestion: suggestion,
               unsealPack: unsealPack, restoreFrom: restoreFrom, variantCount: variantCount, variantOf: variantOf, canRate: canRate, rate: rate, latestReveal: latestReveal };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.R2CCore = api;
 })(this);

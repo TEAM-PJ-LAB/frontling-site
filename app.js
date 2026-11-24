@@ -401,7 +401,7 @@
     }).then(function (p) {
       if (code !== currentCode()) return;  // the link changed while this was loading
       if (!C.validPack(p) || p.code !== code) { if (window.console) console.warn("Frontling: invalid project file", code); throw new Error("invalid pack"); }
-      pack = p; setLang(p.lang); st = load(); render(); flush();
+      pack = C.attachHints(p); setLang(p.lang); st = load(); render(); flush();
       if (updatedWhileLoading === code) { updatedWhileLoading = ""; refreshPack(code); }
     }).catch(function () { if (code === currentCode()) { setLang((navigator.language || "ko").slice(0, 2)); codeScreen(true); } });
   }
@@ -409,7 +409,7 @@
   var updatedWhileLoading = "";
   function refreshPack(code) {
     fetch("packs/" + code + ".json", { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
-      if (p && pack && pack.code === code && C.validPack(p) && p.code === code) { pack = p; setLang(p.lang); render(); }
+      if (p && pack && pack.code === code && C.validPack(p) && p.code === code) { pack = C.attachHints(p); setLang(p.lang); render(); }
     }).catch(function () { /* keep the copy on screen */ });
   }
 
