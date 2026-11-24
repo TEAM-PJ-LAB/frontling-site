@@ -70,12 +70,19 @@ The code is generic and public; the signals come from our own students' logs, wh
 - **Variants:** a stuck point may carry `variants` (for each of the 3 levels, a list of alternative wordings). Each
   student always gets the same variant (hash of participant number and hint position); the hint row records `v`.
   Variants are sealed like hints.
-- **Report:** `node scripts/hint_report.js <form-export.csv> [--out report.md] [--json]` gives, for every hint, what
+- **Report:** `node scripts/hint_report.js <form-export.csv> [--final] [--out report.md] [--json]` gives, for every hint, what
   happened after it was opened: resolved (milestone submitted without the next level), escalated (next level opened)
   or still open; minutes to the next attempt; how much that attempt changed; ratings. It queues hints for review when
   they are probably (>= 90%, Beta posterior) below the project's average at that level, or mostly rated unhelpful, and
   picks a variant as the winner when it is best with >= 95% probability and every variant has >= 10 decided cases.
   Groups under 3 students get no numbers; no student text is printed.
+- **Mid-cohort vs `--final`:** mid-cohort, a hint the student has not got past yet is "still open" and left out. With
+  `--final` (run it once the cohort has ended) it counts as a failure, so a hint that makes students give up is caught.
+  The last level (3) has no next level and can only fail by stopping, so mid-cohort it is judged by ratings only.
+- **What the thresholds mean (simulated):** with every hint equally good, about 1 in 10 hints still lands in the review
+  queue (it is a list for a person to read, not a verdict). Re-running the report after every cohort raises the chance
+  of a winner between two equally good variants from 5% to about 13%; that costs nothing (either wording is fine),
+  while a variant that is really better (60% → 84% resolved) is found in about 6 of 10 experiments within 8 cohorts of 20.
 - **Promote:** `--apply --write` makes each winner the hint and ends that experiment (sealed packs stay sealed).
 
 Pipeline in the source repository, per cohort: export the Form → `hint_report.js` (review queue, experiments) →

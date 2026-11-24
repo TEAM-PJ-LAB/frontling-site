@@ -46,3 +46,12 @@ test("the AI note in index.html matches the Korean string, so nothing shifts whe
   const ko = global.window.R2C_I18N.ko;
   assert.ok(html.includes('aria-label="' + ko.note_label + '">' + ko.brand_note + "</aside>"));
 });
+
+test("the privacy page is complete before the join screen links to it, and has no scripts", () => {
+  const page = fs.readFileSync(path.join(SITE, "privacy.html"), "utf8");
+  assert.ok(!/<script/i.test(page) && /default-src 'none'/.test(page), "static page, nothing runs");
+  const cfg = fs.readFileSync(path.join(SITE, "config.js"), "utf8").match(/privacy:\s*"([^"]*)"/)[1];
+  const blanks = page.match(/［[^］]*］/g) || [];
+  if (cfg) assert.deepEqual(blanks, [], "fill these in privacy.html before setting config.js privacy: " + blanks.join(", "));
+  if (cfg) assert.ok(/^https:\/\/.+\/privacy\.html$/.test(cfg), "config.js privacy points at the published privacy.html");
+});

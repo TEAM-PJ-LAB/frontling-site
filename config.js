@@ -15,7 +15,7 @@ window.R2C_CONFIG = {
   preTest: "",
   postTest: "",
   // Where students and parents read how their data is used (pilot consent form).
-  privacy: "",
+  privacy: "https://team-pj-lab.github.io/frontling-site/privacy.html",
   // Offline support and instant repeat visits (sw.js). Set to false and deploy to switch it off everywhere: open pages
   // unregister it and clear its caches, and the build ships a worker that removes itself from browsers that only
   // ever load the cached page. Set back to true once fixed.

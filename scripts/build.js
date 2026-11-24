@@ -67,6 +67,7 @@ fs.writeFileSync(path.join(OUT, "index.html"), html);
 fs.writeFileSync(path.join(OUT, "sw.js"), sw);
 fs.writeFileSync(path.join(OUT, ".nojekyll"), "");
 fs.copyFileSync(path.join(SRC, "logo.svg"), path.join(OUT, "logo.svg"));  // kept for links people may have saved
+fs.copyFileSync(path.join(SRC, "privacy.html"), path.join(OUT, "privacy.html"));  // linked from the join screen (config.js privacy)
 for (const f of fs.readdirSync(path.join(SRC, "packs")).filter((x) => x.endsWith(".json"))) {
   const p = JSON.parse(read("packs/" + f));
   if (!C.validPack(p) || p.sealed !== 1) fail("packs/" + f + " is invalid or not sealed");

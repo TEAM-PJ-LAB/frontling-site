@@ -1,15 +1,18 @@
 // Which hints work? Reads the activity log and reports, for every hint (project, milestone, stuck point, level,
 // variant), what students did after opening it; picks winners of hint experiments and can promote them into the packs.
-//   node scripts/hint_report.js <log.csv> [--out report.md] [--json] [--cols ...] [--packs dir] [--apply --write]
+//   node scripts/hint_report.js <log.csv> [--final] [--out report.md] [--json] [--cols ...] [--packs dir] [--apply --write]
 //
 // After a hint is opened, within the same milestone:
 //   resolved  - the milestone was submitted without opening the next level of that stuck point
 //   escalated - the next level of that stuck point was opened (this one was not enough)
 //   open      - neither yet (still working, or stopped); left out of the rates until it is decided
+// --final (the cohort has ended): an open hint is a failure too ("stopped": the student never got past it).
+// The last level has no next level, so it can only fail by stopping: without --final it gets no resolve-rate
+// judgement (no review by rate, no experiment winner), only ratings.
 // Also: the student's own rating ("rate" rows), minutes until the next attempt, and how much that attempt changed
 // from the one before the hint (0 = same words, 1 = all new).
 //
-// Statistics: a hint's resolve rate has a Beta(1 + resolved, 1 + escalated) posterior. A hint is queued for review
+// Statistics: a hint's resolve rate has a Beta(1 + resolved, 1 + failed) posterior (failed = escalated, plus stopped with --final). A hint is queued for review
 // when it is probably (>= 90%) below the average of hints at the same level in the project, or when most ratings are
 // negative. Variants are assigned at random (by participant), so comparing them is a fair experiment: a variant wins
 // when it is the best with >= 95% probability and every variant has >= 10 decided cases.
@@ -37,7 +40,7 @@ function pBest(groups, r) {
   const wins = groups.map(() => 0);
   for (let k = 0; k < DRAWS; k++) {
     let best = -1, bi = 0;
-    groups.forEach((g, i) => { const x = beta(r, 1 + g.resolved, 1 + g.escalated); if (x > best) { best = x; bi = i; } });
+    groups.forEach((g, i) => { const x = beta(r, 1 + g.resolved, 1 + g.failed); if (x > best) { best = x; bi = i; } });
     wins[bi]++;
   }
   return wins.map((w) => w / DRAWS);
@@ -73,13 +76,14 @@ function outcomes(lines) {
   return out;
 }
 
-function summarize(list) {
+function summarize(list, final) {
   const students = new Set(list.map((x) => x.pid)).size;
   const resolved = list.filter((x) => x.outcome === "resolved").length, escalated = list.filter((x) => x.outcome === "escalated").length;
+  const open = list.length - resolved - escalated, failed = escalated + (final ? open : 0);
   const rated = list.filter((x) => x.up !== null);
   return {
-    opened: list.length, students, resolved, escalated, open: list.length - resolved - escalated,
-    rate: (1 + resolved) / (2 + resolved + escalated),  // posterior mean
+    opened: list.length, students, resolved, escalated, open, failed,
+    rate: (1 + resolved) / (2 + resolved + failed),  // posterior mean
     up: rated.filter((x) => x.up).length, down: rated.filter((x) => !x.up).length,
     minutes: median(list.map((x) => x.minutes).filter((x) => x !== null && x >= 0)),
     novelty: median(list.map((x) => x.novelty).filter((x) => x !== null)),
@@ -87,7 +91,8 @@ function summarize(list) {
 }
 
 // ---------- analysis ----------
-function analyse(events, packs) {
+function analyse(events, packs, opts = {}) {
+  const final = !!opts.final, judged = (lv) => final || lv < C.MAX_LEVEL;  // see --final above
   const r = rng(20261117), hints = [], experiments = [];
   const key = (x) => [x.code, x.m, x.s, x.lv].join("|");
   const groups = new Map();
@@ -95,19 +100,19 @@ function analyse(events, packs) {
   // Baseline: resolve rate of all hints at the same level in the same project.
   const base = {};
   events.forEach((x) => {
-    const b = base[x.code + "|" + x.lv] || (base[x.code + "|" + x.lv] = { resolved: 0, escalated: 0 });
-    if (x.outcome === "resolved") b.resolved++; if (x.outcome === "escalated") b.escalated++;
+    const b = base[x.code + "|" + x.lv] || (base[x.code + "|" + x.lv] = { resolved: 0, failed: 0 });
+    if (x.outcome === "resolved") b.resolved++; else if (x.outcome === "escalated" || final) b.failed++;
   });
-  const baseRate = (code, lv) => { const b = base[code + "|" + lv]; return (1 + b.resolved) / (2 + b.resolved + b.escalated); };
+  const baseRate = (code, lv) => { const b = base[code + "|" + lv]; return (1 + b.resolved) / (2 + b.resolved + b.failed); };
 
   groups.forEach((list, k) => {
     const [code, m, s, lv] = k.split("|"), M = +m, S = +s, LV = +lv, pack = packs[code];
-    const sum = summarize(list), b = baseRate(code, LV);
+    const sum = summarize(list, final), b = baseRate(code, LV);
     const label = pack && pack.milestones[M] && pack.milestones[M].stuck[S] ? pack.milestones[M].stuck[S].label : "(unknown stuck point)";
     const text = (v) => { try { return pack ? C.hintText(pack, M, S, LV - 1, v) : ""; } catch (e) { return ""; } };
     const enough = sum.students >= MIN_STUDENTS;
-    const decided = sum.resolved + sum.escalated;
-    const pLow = enough && decided >= REVIEW_MIN ? pBelow(sum.resolved, sum.escalated, b, r) : null;
+    const decided = sum.resolved + sum.failed;
+    const pLow = enough && judged(LV) && decided >= REVIEW_MIN ? pBelow(sum.resolved, sum.failed, b, r) : null;
     const disliked = sum.up + sum.down >= REVIEW_MIN && sum.down / (sum.up + sum.down) >= 0.5;
     hints.push({ code, m: M, s: S, level: LV, label, text: text(0), ...sum, baseline: b, pLow, enough,
       review: !!((pLow !== null && pLow >= REVIEW_P) || (enough && disliked)), impact: decided * Math.max(0, b - sum.rate) });
@@ -115,11 +120,11 @@ function analyse(events, packs) {
     // Experiment: compare the variants of this hint.
     if (!list.some((x) => x.experiment)) return;
     const byV = new Map(); list.forEach((x) => { if (!byV.has(x.v)) byV.set(x.v, []); byV.get(x.v).push(x); });
-    const vs = [...byV.keys()].sort((a, c) => a - c).map((v) => ({ v, text: text(v), ...summarize(byV.get(v)) }));
+    const vs = [...byV.keys()].sort((a, c) => a - c).map((v) => ({ v, text: text(v), ...summarize(byV.get(v), final) }));
     const p = vs.length > 1 ? pBest(vs, r) : vs.map(() => 1);
     vs.forEach((x, i) => { x.pBest = p[i]; });
     const best = vs.reduce((a, c) => (c.pBest > a.pBest ? c : a));
-    const ready = vs.length > 1 && vs.every((x) => x.resolved + x.escalated >= WIN_MIN && x.students >= MIN_STUDENTS);
+    const ready = judged(LV) && vs.length > 1 && vs.every((x) => x.resolved + x.failed >= WIN_MIN && x.students >= MIN_STUDENTS);
     experiments.push({ code, m: M, s: S, level: LV, label, variants: vs, winner: ready && best.pBest >= WIN_P ? best.v : null });
   });
   hints.sort((a, c) => c.review - a.review || c.impact - a.impact || a.code.localeCompare(c.code) || a.m - c.m || a.s - c.s || a.level - c.level);
@@ -136,7 +141,9 @@ function markdown(res, meta) {
   const out = [`# 힌트 효과 보고서`, ``, `${meta.rows}행, 학생 ${meta.students}명, 힌트 열람 ${meta.opened}회 · 생성 ${meta.when}`, ``,
     `해결 = 그 지점의 다음 단계 없이 마일스톤 제출, 상승 = 다음 단계를 엶, 진행 중 = 아직 결정 안 됨(비율에서 제외).`,
     `해결률은 사후 평균(작은 표본을 과장하지 않음)이고, 기준선은 같은 과제·같은 단계 힌트 전체의 해결률이에요.`,
-    `학생 ${MIN_STUDENTS}명 미만 묶음은 숫자를 보여 주지 않아요.`, ``];
+    `학생 ${MIN_STUDENTS}명 미만 묶음은 숫자를 보여 주지 않아요.`,
+    meta.final ? `기수 종료 기준(--final): 진행 중으로 남은 힌트는 실패(멈춤)로 셉니다.`
+      : `진행 중 기준: 마지막 단계 힌트는 다음 단계가 없어 해결률로 판정하지 않아요(평가만). 기수가 끝나면 --final로 다시 돌리세요.`, ``];
   const queue = res.hints.filter((h) => h.review);
   out.push(`## 1. 검토가 필요한 힌트 (${queue.length})`, ``);
   if (!queue.length) out.push(`없음. 데이터가 더 쌓이면 다시 확인하세요.`, ``);
@@ -199,8 +206,8 @@ if (require.main === module) {
     const p = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
     if (C.validPack(p)) { packs[p.code] = p; files[p.code] = path.join(dir, f); }
   }
-  const res = analyse(events, packs);
-  const meta = { rows: rows.length, students: new Set(events.map((x) => x.code + "/" + x.pid)).size, opened: events.length, when: new Date().toISOString().slice(0, 10) };
+  const res = analyse(events, packs, { final: args.includes("--final") });
+  const meta = { rows: rows.length, students: new Set(events.map((x) => x.code + "/" + x.pid)).size, opened: events.length, when: new Date().toISOString().slice(0, 10), final: args.includes("--final") };
   const body = args.includes("--json") ? JSON.stringify({ meta, ...res }, null, 1) + "\n" : markdown(res, meta);
   const out = L.option(args, "out", null);
   if (out) fs.writeFileSync(out, body); else process.stdout.write(body);

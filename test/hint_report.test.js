@@ -104,3 +104,21 @@ test("a log whose columns don't match says which ones are missing and how to map
     "--cols", "pid=참여 번호,code=과제 코드,kind=종류,milestone=마일스톤,detail=내용", "--json"], { encoding: "utf8" });
   assert.equal(JSON.parse(ok).meta.rows, 1);
 });
+
+test("last-level hints are not judged by resolve rate mid-cohort, and --final counts students who stopped", () => {
+  const { analyse } = require("../scripts/hint_report.js");
+  const ev = [];
+  // 40 students; level 3 can only resolve or stay open (there is no level 4). Stuck 0 level 1 makes half of them stop.
+  for (let i = 0; i < 40; i++) {
+    const e = (s, lv, outcome) => ev.push({ code: "x", pid: "p" + i, m: 0, s, lv, v: 0, experiment: false, outcome, up: null, minutes: null, novelty: null });
+    e(0, 1, i % 2 ? "open" : "resolved");
+    for (const s of [1, 2, 3]) e(s, 1, i % 8 ? "resolved" : "escalated");
+    e(1, 3, i % 4 ? "resolved" : "open"); e(2, 3, i % 5 ? "resolved" : "open"); e(3, 3, "resolved");
+  }
+  const mid = analyse(ev, {}), fin = analyse(ev, {}, { final: true });
+  const find = (res, s, lv) => res.hints.find((h) => h.s === s && h.level === lv);
+  for (const s of [1, 2, 3]) assert.equal(find(mid, s, 3).pLow, null, "no rate judgement for the last level mid-cohort");
+  assert.equal(find(mid, 0, 1).review, false, "mid-cohort, students still working are not failures");
+  assert.equal(find(fin, 0, 1).review, true, "after the cohort, a hint half the students stopped at is queued");
+  assert.ok(find(fin, 2, 3).pLow !== null, "after the cohort, the last level is judged too");
+});
