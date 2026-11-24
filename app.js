@@ -32,6 +32,8 @@
   }
 
   function safeUrl(u) { return /^https?:\/\//i.test(u || "") ? u : ""; }
+  // privacy.html is Korean; the English page sits next to it as privacy-en.html.
+  function privacyUrl() { return lang === "en" ? CFG.privacy.replace(/privacy\.html$/, "privacy-en.html") : CFG.privacy; }
   // keepFocus: announce through the live region without pulling focus away from the control the student just used.
   function flash(key, kw, keepFocus) {
     flashEl.textContent = key ? _(key, kw) : ""; flashEl.hidden = !key;
@@ -168,7 +170,7 @@
           h("input", { id: "pid", name: "pid", autocomplete: "off", maxlength: "40", required: true }),
           h("p", { class: "help", text: _("pid_help") })),
         h("label", { class: "check-row" }, h("input", { type: "checkbox", name: "consent" }), " " + _("consent_label")),
-        safeUrl(CFG.privacy) ? h("p", { class: "small" }, h("a", { href: CFG.privacy, target: "_blank", rel: "noopener noreferrer", text: _("privacy_link") })) : null,
+        safeUrl(CFG.privacy) ? h("p", { class: "small" }, h("a", { href: privacyUrl(), target: "_blank", rel: "noopener noreferrer", text: _("privacy_link") })) : null,
         h("div", {}, h("button", { text: _("join_btn") }))),
       h("p", { class: "help" }, _("join_restore") + " ", restoreControl())));
   }

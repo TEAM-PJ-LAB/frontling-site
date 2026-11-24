@@ -47,11 +47,21 @@ test("the AI note in index.html matches the Korean string, so nothing shifts whe
   assert.ok(html.includes('aria-label="' + ko.note_label + '">' + ko.brand_note + "</aside>"));
 });
 
-test("the privacy page is complete before the join screen links to it, and has no scripts", () => {
-  const page = fs.readFileSync(path.join(SITE, "privacy.html"), "utf8");
-  assert.ok(!/<script/i.test(page) && /default-src 'none'/.test(page), "static page, nothing runs");
-  const cfg = fs.readFileSync(path.join(SITE, "config.js"), "utf8").match(/privacy:\s*"([^"]*)"/)[1];
-  const blanks = page.match(/［[^］]*］/g) || [];
-  if (cfg) assert.deepEqual(blanks, [], "fill these in privacy.html before setting config.js privacy: " + blanks.join(", "));
+test("the privacy pages (ko, en) are complete before the join screen links to them, match, and run nothing", () => {
+  const read = (f) => fs.readFileSync(path.join(SITE, f), "utf8");
+  const ko = read("privacy.html"), en = read("privacy-en.html");
+  const ids = (p) => [...p.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1]);
+  const toc = (p) => [...p.matchAll(/<li><a href="#([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(ids(ko).length >= 10, "sections found");
+  assert.deepEqual(ids(en), ids(ko), "the English page has the same sections in the same order");
+  assert.deepEqual(toc(ko), ids(ko)); assert.deepEqual(toc(en), ids(en));
+  for (const p of [ko, en]) {
+    assert.ok(!/<script/i.test(p) && /default-src 'none'; style-src 'self'/.test(p), "static page, nothing runs");
+    assert.ok(p.includes('href="privacy.css"') && p.includes('href="privacy.html"') && p.includes('href="privacy-en.html"'));
+    assert.equal((p.match(/<tr>/g) || []).length, (ko.match(/<tr>/g) || []).length, "same table rows");
+  }
+  const cfg = read("config.js").match(/privacy:\s*"([^"]*)"/)[1];
+  const blanks = (ko + en).match(/［[^］]*］/g) || [];
+  if (cfg) assert.deepEqual(blanks, [], "fill these before setting config.js privacy: " + blanks.join(", "));
   if (cfg) assert.ok(/^https:\/\/.+\/privacy\.html$/.test(cfg), "config.js privacy points at the published privacy.html");
 });
